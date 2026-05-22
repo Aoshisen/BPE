@@ -6,10 +6,10 @@ fn main() {
     let mut tokens = tokenize_text(text);
     let vocab = build_vocab(&mut tokens);
 
-    println!("\nVocabulary Merges:");
-    for ((l, r), id) in &vocab {
-        println!("  [{}, {}] -> {}", l, r, id);
-    }
+    // println!("\nVocabulary Merges:");
+    // for ((l, r), id) in &vocab {
+    //     println!("  [{}, {}] -> {}", l, r, id);
+    // }
     // print_tokens(&tokens);
     print_tokens(&decode_to_base_tokens(&tokens, &vocab));
 }

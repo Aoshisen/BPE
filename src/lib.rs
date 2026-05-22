@@ -5,24 +5,25 @@ pub fn tokenize_text(text: &str) -> Vec<u32> {
 }
 
 pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
-    let mut vocab: HashMap<(u32, u32), u32> = HashMap::new();
-    let mut next_id: u32 = 256;
-    let mut pair_counts: HashMap<(u32, u32), usize> = HashMap::new();
-    let mut new_tokens = Vec::new();
+    let mut vocab = HashMap::new();
+    let mut next_id = 256;
+
+    // Reuse allocations
+    let mut pair_counts = HashMap::with_capacity(tokens.len());
+    let mut new_tokens = Vec::with_capacity(tokens.len());
 
     loop {
         pair_counts.clear();
-        for i in 0..tokens.len() - 1 {
-            let pair = (tokens[i], tokens[i + 1]);
-            *pair_counts.entry(pair).or_insert(0) += 1;
+        for window in tokens.windows(2) {
+            *pair_counts.entry((window[0], window[1])).or_insert(0) += 1;
         }
 
-        let best_pair = match pair_counts.iter().max_by_key(|&(_, count)| count) {
-            Some((&pair, &count)) if count > 1 => pair,
+        let (best_pair, _) = match pair_counts.iter().max_by_key(|&(_, c)| c) {
+            Some(pair) if *pair.1 > 1 => pair,
             _ => break,
         };
 
-        let new_id = *vocab.entry(best_pair).or_insert_with(|| {
+        let new_id = *vocab.entry(*best_pair).or_insert_with(|| {
             let id = next_id;
             next_id += 1;
             id
@@ -31,7 +32,7 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
         new_tokens.clear();
         let mut i = 0;
         while i < tokens.len() {
-            if i + 1 < tokens.len() && (tokens[i], tokens[i + 1]) == best_pair {
+            if i + 1 < tokens.len() && (tokens[i], tokens[i + 1]) == *best_pair {
                 new_tokens.push(new_id);
                 i += 2;
             } else {
@@ -39,15 +40,15 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
                 i += 1;
             }
         }
+
         std::mem::swap(tokens, &mut new_tokens);
-        // println!("  Tokens length reduced to: {}", tokens.len());
     }
 
     vocab
 }
 
 pub fn decode_to_base_tokens(tokens: &[u32], vocab: &HashMap<(u32, u32), u32>) -> Vec<u32> {
-    let mut reverse_vocab: HashMap<u32, (u32, u32)> = HashMap::new();
+    let mut reverse_vocab: HashMap<u32, (u32, u32)> = HashMap::with_capacity(vocab.len());
     for ((left, right), new_id) in vocab {
         reverse_vocab.insert(*new_id, (*left, *right));
     }
