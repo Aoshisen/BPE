@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "BPE"
+name = "bpe"
 version = "0.1.0"
