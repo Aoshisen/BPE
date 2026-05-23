@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 pub fn tokenize_text(text: &str) -> Vec<u32> {
     text.as_bytes().iter().map(|&b| b as u32).collect()
@@ -11,23 +12,39 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
     // Reuse allocations
     let mut pair_counts = HashMap::with_capacity(tokens.len());
     let mut new_tokens = Vec::with_capacity(tokens.len());
+    let mut count = 0;
 
     loop {
         pair_counts.clear();
+        let start = Instant::now();
         for window in tokens.windows(2) {
             *pair_counts.entry((window[0], window[1])).or_insert(0) += 1;
         }
+        let duration = start.elapsed();
+        println!("创建pair_count: {:?}", duration);
 
+        let start = Instant::now();
         let (best_pair, _) = match pair_counts.iter().max_by_key(|&(_, c)| c) {
             Some(pair) if *pair.1 > 1 => pair,
             _ => break,
         };
 
+        let duration = start.elapsed();
+        println!("查找最佳pair: {:?}", duration);
+
+        let start = Instant::now();
         let new_id = *vocab.entry(*best_pair).or_insert_with(|| {
             let id = next_id;
             next_id += 1;
             id
         });
+
+        let duration = start.elapsed();
+        println!("创建new_id: {:?}", duration);
+        let start = Instant::now();
+        if count >= 3 {
+            break;
+        }
 
         new_tokens.clear();
         let mut i = 0;
@@ -40,7 +57,10 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
                 i += 1;
             }
         }
+        let duration = start.elapsed();
+        println!("生成新tokens: {:?}", duration);
 
+        count += 1;
         std::mem::swap(tokens, &mut new_tokens);
     }
 
