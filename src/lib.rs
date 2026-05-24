@@ -1,29 +1,64 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+fn update_pair_count(pair_counts: &mut HashMap<(u32, u32), u32>, pair: (u32, u32), delta: i32) {
+    if delta == 0 {
+        return;
+    }
+
+    match pair_counts.get_mut(&pair) {
+        Some(count) => {
+            if delta < 0 {
+                let drop = (-delta) as u32;
+                if *count > drop {
+                    *count -= drop;
+                } else {
+                    pair_counts.remove(&pair);
+                }
+            } else {
+                *count += delta as u32;
+            }
+        }
+        None if delta > 0 => {
+            pair_counts.insert(pair, delta as u32);
+        }
+        _ => {}
+    }
+}
 pub fn tokenize_text(text: &str) -> Vec<u32> {
     text.as_bytes().iter().map(|&b| b as u32).collect()
 }
 
+const THRESHOLD: u32 = 10;
 pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
     let mut vocab = HashMap::new();
     let mut next_id = 256;
 
     let mut pair_counts = HashMap::with_capacity(tokens.len());
     let mut new_tokens = Vec::with_capacity(tokens.len());
-    let mut count = 0;
 
-    let start = Instant::now();
-    // 每一次迭代 不清除 pair_counts, 只更新被替换的pair的count, 这样可以大幅提升性能
+    let mut start = Instant::now();
+    // 每一次迭代不重新扫描全部 pair_counts，而是更新被替换 pair 及其左右邻居的计数，并移除计数归零的 entry。
+
+    let mut count = 0;
 
     for window in tokens.windows(2) {
         *pair_counts.entry((window[0], window[1])).or_insert(0) += 1;
     }
+
+    println!("分词结束: {:?} ", start.elapsed());
+    start = Instant::now();
+
     loop {
         let best_pair = match pair_counts.iter().max_by_key(|&(_, c)| c) {
             Some((pair, count)) if *count > 1 => *pair,
-            _ => break,
+            _ => {
+                println!("创建: {:?}", start.elapsed());
+                break;
+            }
         };
+        // println!("best_pair: {:?}", best_pair);
+        // println!("pair_counts: {:?}", pair_counts.len());
 
         let new_id = *vocab.entry(best_pair).or_insert_with(|| {
             let id = next_id;
@@ -31,33 +66,50 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
             id
         });
 
-        if count >= 1000 {
-            println!("创建: {:?}", start.elapsed());
-            break;
+        if count % THRESHOLD == 0 {
+            println!(
+                "创建时间: {:?} tokens length:{} pair_counts length:{}",
+                start.elapsed(),
+                tokens.len(),
+                pair_counts.len()
+            );
+            start = Instant::now();
         }
 
         let mut i = 0;
         new_tokens.clear();
         while i < tokens.len() {
-            if i + 1 < tokens.len() && (tokens[i], tokens[i + 1]) == best_pair {
-                // aabc
-                //  aXc
-                // 1. 找到new_tokens 的钱一个char,然后组合 成一个pair 如果在 pairs_count 中,就把这个pair + 1; 如果不存在 那么创建一个new_id;
-                // 2. 当前pair_counts 中, 删除 (tokens[i], tokens[i+1]) 这个pair 的count -1;
-                if new_tokens.len() > 0 {
-                    let last_token = *new_tokens.last().unwrap();
-                    *pair_counts.entry((last_token, new_id)).or_insert(0) += 1;
+            if i < tokens.len() - 1 && (tokens[i], tokens[i + 1]) == best_pair {
+                // 1. 移除受影响的旧 pairs
+                // 左边的 pair (如果有)
+                if i > 0 {
+                    update_pair_count(&mut pair_counts, (tokens[i - 1], tokens[i]), -1);
                 }
-                pair_counts
-                    .entry((tokens[i], tokens[i + 1]))
-                    .and_modify(|c| *c -= 1);
+                // 当前的 pair
+                update_pair_count(&mut pair_counts, best_pair, -1);
+
+                // 右边的 pair (如果有)
+                if i + 2 < tokens.len() {
+                    update_pair_count(&mut pair_counts, (tokens[i + 1], tokens[i + 2]), -1);
+                }
+
+                // 2. 添加新 token
                 new_tokens.push(new_id);
+
+                // 3. 添加新的 pairs
+                // 左边的新 pair (如果有)
+                if new_tokens.len() >= 2 {
+                    let left_pair = (new_tokens[new_tokens.len() - 2], new_id);
+                    update_pair_count(&mut pair_counts, left_pair, 1);
+                }
+
                 i += 2;
             } else {
                 new_tokens.push(tokens[i]);
                 i += 1;
             }
         }
+
         count += 1;
         std::mem::swap(tokens, &mut new_tokens);
     }
