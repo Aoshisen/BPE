@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use ahash::AHashMap;
 use std::time::Instant;
+// use std::collections::{HashMap as AHashMap};
 
-fn update_pair_count(pair_counts: &mut HashMap<(u32, u32), u32>, pair: (u32, u32), delta: i32) {
+fn update_pair_count(pair_counts: &mut AHashMap<(u32, u32), u32>, pair: (u32, u32), delta: i32) {
     if delta == 0 {
         return;
     }
@@ -30,11 +31,11 @@ pub fn tokenize_text(text: &str) -> Vec<u32> {
 }
 
 const THRESHOLD: u32 = 10;
-pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
-    let mut vocab = HashMap::new();
+pub fn build_vocab(tokens: &mut Vec<u32>) -> AHashMap<(u32, u32), u32> {
+    let mut vocab = AHashMap::new();
     let mut next_id = 256;
 
-    let mut pair_counts = HashMap::with_capacity(tokens.len());
+    let mut pair_counts = AHashMap::with_capacity(tokens.len());
     let mut new_tokens = Vec::with_capacity(tokens.len());
 
     let mut start = Instant::now();
@@ -53,7 +54,7 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
         let best_pair = match pair_counts.iter().max_by_key(|&(_, c)| c) {
             Some((pair, count)) if *count > 1 => *pair,
             _ => {
-                println!("创建: {:?}", start.elapsed());
+                println!("total: {:?}", start.elapsed());
                 break;
             }
         };
@@ -117,8 +118,8 @@ pub fn build_vocab(tokens: &mut Vec<u32>) -> HashMap<(u32, u32), u32> {
     vocab
 }
 
-pub fn decode_to_base_tokens(tokens: &[u32], vocab: &HashMap<(u32, u32), u32>) -> Vec<u32> {
-    let mut reverse_vocab: HashMap<u32, (u32, u32)> = HashMap::with_capacity(vocab.len());
+pub fn decode_to_base_tokens(tokens: &[u32], vocab: &AHashMap<(u32, u32), u32>) -> Vec<u32> {
+    let mut reverse_vocab = AHashMap::with_capacity(vocab.len());
     for ((left, right), new_id) in vocab {
         reverse_vocab.insert(*new_id, (*left, *right));
     }
